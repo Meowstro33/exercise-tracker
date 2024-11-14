@@ -5,9 +5,8 @@ require('dotenv').config();
 const bodyParser = require('body-parser');
 
 let users = [];
-let logs = [];
+let exercises = {};
 
-app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cors());
 app.use(express.static('public'));
@@ -17,26 +16,27 @@ app.get('/', (req, res) => {
 });
 
 // Create a new user
-app.post('/api/users', function (req, res) {
-  const uname = req.body.username;
-  const userId = users.length.toString(); // Sequential ID based on array length
-  const newUser = { username: uname, _id: userId };
+app.post('/api/users', (req, res) => {
+  const username = req.body.username;
+  const userId = (users.length + 1).toString();
+  const newUser = { username, _id: userId };
   users.push(newUser);
+  exercises[userId] = [];
   res.json(newUser);
 });
 
 // Retrieve all users
-app.get('/api/users', function (req, res) {
+app.get('/api/users', (req, res) => {
   res.json(users);
 });
 
 // Add exercise to a user
-app.post('/api/users/:_id/exercises', function (req, res) {
-  const id = req.params._id;
-  const user = users.find((user) => user._id === id);
+app.post('/api/users/:_id/exercises', (req, res) => {
+  const { _id } = req.params;
+  const user = users.find((u) => u._id === _id);
 
   if (!user) {
-    return res.status(404).send('User not found');
+    return res.status(404).json({ error: 'User not found' });
   }
 
   const description = req.body.description;
@@ -46,57 +46,55 @@ app.post('/api/users/:_id/exercises', function (req, res) {
   const exercise = {
     description,
     duration,
-    date: date.toDateString()
+    date: date.toDateString(),
   };
 
-  logs.push({ username: user.username, _id: id, exercise });
+  exercises[_id].push(exercise);
 
   res.json({
     username: user.username,
     description,
     duration,
     date: exercise.date,
-    _id: id
+    _id,
   });
 });
 
 // Retrieve user's exercise log
-app.get('/api/users/:_id/logs', function (req, res) {
-  const id = req.params._id;
-  const user = users.find((user) => user._id === id);
+app.get('/api/users/:_id/logs', (req, res) => {
+  const { _id } = req.params;
+  const user = users.find((u) => u._id === _id);
 
   if (!user) {
-    return res.status(404).send('User not found');
+    return res.status(404).json({ error: 'User not found' });
   }
 
-  let userLogs = logs
-    .filter((log) => log._id === id)
-    .map((log) => ({
-      description: log.exercise.description,
-      duration: log.exercise.duration,
-      date: log.exercise.date
-    }));
+  let log = exercises[_id].map((ex) => ({
+    description: ex.description,
+    duration: ex.duration,
+    date: ex.date,
+  }));
 
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
   const limit = parseInt(req.query.limit);
 
   if (from || to) {
-    userLogs = userLogs.filter((log) => {
-      const logDate = new Date(log.date);
+    log = log.filter((ex) => {
+      const logDate = new Date(ex.date);
       return (!from || logDate >= from) && (!to || logDate <= to);
     });
   }
 
   if (limit) {
-    userLogs = userLogs.slice(0, limit);
+    log = log.slice(0, limit);
   }
 
   res.json({
     username: user.username,
-    count: userLogs.length,
-    _id: id,
-    log: userLogs
+    count: log.length,
+    _id,
+    log,
   });
 });
 
