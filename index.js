@@ -16,81 +16,81 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html');
 });
 
-// Create a New User
-app.post('/api/users', (req, res) => {
+app.post('/api/users', function (req, res) {
   const uname = req.body.username;
-  const userId = users.length + 1;
-  const newUser = { username: uname, _id: userId.toString() };
-  users.push(newUser);
-  res.json(newUser);
+  const userId = users.length > 0 ? users[users.length - 1]._id + 1 : 1;
+  const usernameObj = { username: uname, _id: userId };
+  users.push(usernameObj);
+  res.send(usernameObj);
 });
 
-// Get All Users
-app.get('/api/users', (req, res) => {
-  res.json(users);
+app.get('/api/users', function (req, res) {
+  res.send(users);
 });
 
-// Add Exercise to User
-app.post('/api/users/:_id/exercises', (req, res) => {
-  const id = req.params._id;
-  const user = users.find((user) => user._id === id);
+app.post('/api/users/:_id/exercises', function (req, res) {
+  const id = parseInt(req.params._id);
+  const user = users.find((u) => u._id === id);
+  
   if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+    return res.status(404).send({ error: 'User not found' });
   }
 
-  const { description, duration } = req.body;
+  const description = req.body.description;
+  const duration = parseInt(req.body.duration);
   const date = req.body.date ? new Date(req.body.date) : new Date();
-
-  const newExercise = {
-    username: user.username,
+  
+  const exerciseEntry = {
     description,
-    duration: parseInt(duration),
+    duration,
     date: date.toDateString(),
-    _id: id
   };
-
+  
   logs.push({
     username: user.username,
     _id: id,
-    exercise: newExercise
+    exercise: exerciseEntry,
   });
 
-  res.json(newExercise);
+  res.send({
+    username: user.username,
+    description,
+    duration,
+    date: date.toDateString(),
+    _id: id,
+  });
 });
 
-// Get Exercise Logs with Filters
-app.get('/api/users/:_id/logs', (req, res) => {
-  const id = req.params._id;
-  const user = users.find((user) => user._id === id);
+app.get('/api/users/:_id/logs', function (req, res) {
+  const id = parseInt(req.params._id);
+  const user = users.find((u) => u._id === id);
+  
   if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+    return res.status(404).send({ error: 'User not found' });
   }
 
-  const { from, to, limit } = req.query;
   let userLogs = logs
     .filter((log) => log._id === id)
     .map((log) => log.exercise);
 
-  // Apply date filters
+  const from = req.query.from ? new Date(req.query.from) : null;
+  const to = req.query.to ? new Date(req.query.to) : null;
+  const limit = req.query.limit ? parseInt(req.query.limit) : userLogs.length;
+
   if (from) {
-    const fromDate = new Date(from);
-    userLogs = userLogs.filter((log) => new Date(log.date) >= fromDate);
+    userLogs = userLogs.filter((log) => new Date(log.date) >= from);
   }
   if (to) {
-    const toDate = new Date(to);
-    userLogs = userLogs.filter((log) => new Date(log.date) <= toDate);
+    userLogs = userLogs.filter((log) => new Date(log.date) <= to);
   }
+  
+  userLogs = userLogs.slice(0, limit);
 
-  // Apply limit filter
-  if (limit) {
-    userLogs = userLogs.slice(0, parseInt(limit));
-  }
-
-  res.json({
+  res.send({
     username: user.username,
     count: userLogs.length,
     _id: id,
-    log: userLogs
+    log: userLogs,
   });
 });
 
